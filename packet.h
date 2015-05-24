@@ -27,24 +27,22 @@ typedef struct query_t {
 typedef query_t queries_t;
 
 typedef enum {
-    CONTENT_TYPE = 1,
-    MAX_AGE = 2,
-    PROXY_URI = 3,
+    IF_MATCH = 1,
+    URI_HOST = 3,
     ETAG = 4,
-    URI_HOST = 5,
-    LOCATION_PATH = 6,
+    IF_NONE_MATCH = 5,
+    OBSERVE = 6,
     URI_PORT = 7,
-    LOCATION_QUERY = 8,
-    URI_PATH = 9,
-    OBSERVE = 10,
-    TOKEN = 11,
-    ACCEPT = 12,
-    IF_MATCH = 13,
-    MAX_OFE = 14,
+    LOCATION_PATH = 8,
+    URI_PATH = 11,
+    CONTENT_FORMAT = 12,
+    MAX_AGE = 14,
     URI_QUERY = 15,
-    BLOCK2 = 17,
-    BLOCK1 = 19,
-    IF_NONE_MATCH = 21
+    ACCEPT = 17,
+    LOCATION_QUERY = 20,
+    PROXY_URI = 35,
+    PROXY_SCHEME = 39,
+    SIZE1 = 60,
 } coap_option_t;
 
 // non coap method values
@@ -178,6 +176,10 @@ public:
     void set_block2_offset(uint32_t block2_offset);
     void set_payload_len(uint8_t payload_len);
     void set_payload(uint8_t* payload);
+    
+    uint8_t payload_len_;
+    uint8_t *payload_;
+    
 protected:
     uint8_t add_fence_opt(uint8_t opt, uint8_t *current_delta, uint8_t *buf);
     uint8_t set_opt_header(uint8_t delta, size_t len, uint8_t *buf);
@@ -194,7 +196,6 @@ private:
     uint8_t opt_count_;
     uint8_t code_;
     uint16_t mid_;
-
     uint32_t options_;
 
     uint8_t content_type_; // 1
@@ -230,7 +231,5 @@ private:
     //uint32_t block1_offset_; // 19
     //uint8_t if_none_match; // 21
 
-    uint8_t payload_len_;
-    uint8_t *payload_;
 };
 #endif

@@ -61,11 +61,11 @@ coap_status_t CoapSensor::callback(uint8_t method, uint8_t* input_data, size_t i
     memcpy(output_data, bla, strlen(bla) + 1);
     *output_data_len = strlen(bla) + 1;
     if (method == GET) {
-	this->get_value(output_data, output_data_len);
-	return CONTENT;
+        this->get_value(output_data, output_data_len);
+        return CONTENT;
     } else if (method == POST) {
-	this->set_value(input_data, input_data_len, output_data, output_data_len);
-	return CHANGED;
+        this->set_value(input_data, input_data_len, output_data, output_data_len);
+        return CHANGED;
     }
 }
 

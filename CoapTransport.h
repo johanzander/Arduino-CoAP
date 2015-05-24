@@ -14,15 +14,16 @@
  ** If not, see <http://www.gnu.org/licenses/>.                                **
  *******************************************************************************/
 
-// CURRENT COAP ATTRIBUTES
-#define COAP_VERSION                        1
-#define COAP_HEADER_VERSION_MASK            0xC0
-#define COAP_HEADER_VERSION_SHIFT           6
-#define COAP_HEADER_TYPE_MASK               0x30
-#define COAP_HEADER_TYPE_SHIFT              4
-#define COAP_HEADER_TYPE_MASK               0x30
-#define COAP_HEADER_TYPE_SHIFT              4
-#define COAP_HEADER_TOKEN_LENGTH_MASK       0x0F
-#define COAP_HEADER_TOKEN_LENGTH_SHIFT      0
-#define COAP_HEADER_LEN                     4
-#define COAP_PAYLOAD_MARKER                 0xFF
+#ifndef COAPTRANSPORT_H
+#define COAPTRANSPORT_H
+
+class CoapTransport
+{
+public:
+    CoapTransport() {};
+    virtual int parsePacket();
+    virtual int write(unsigned char *buf, size_t buflen);
+    virtual int read(unsigned char *buf, size_t buflen);
+};
+
+#endif

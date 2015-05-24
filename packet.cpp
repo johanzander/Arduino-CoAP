@@ -20,6 +20,7 @@ void CoapPacket::init(void) {
     version_ = COAP_VERSION;
     type_ = 0;
     opt_count_ = 0;
+    token_len_ = 0;
     code_ = 0;
     mid_ = 0;
     options_ = 0x00;
@@ -29,222 +30,266 @@ void CoapPacket::init(void) {
 
 coap_status_t CoapPacket::buffer_to_packet(uint8_t len, uint8_t* buf, char* largeBuf) {
     //header
-    version_ = (COAP_HEADER_VERSION_MASK & buf[1]) >> COAP_HEADER_VERSION_SHIFT;
-    type_ = (COAP_HEADER_TYPE_MASK & buf[1]) >> COAP_HEADER_TYPE_SHIFT;
-    opt_count_ = (COAP_HEADER_OPT_COUNT_MASK & buf[1]) >> COAP_HEADER_OPT_COUNT_SHIFT;
-    code_ = buf[2];
-    mid_ = buf[3] << 8 | buf[4];
+    uint8_t options_len;
+    version_ = (COAP_HEADER_VERSION_MASK & buf[0]) >> COAP_HEADER_VERSION_SHIFT;
+    type_ = (COAP_HEADER_TYPE_MASK & buf[0]) >> COAP_HEADER_TYPE_SHIFT;
+    token_len_ = (COAP_HEADER_TOKEN_LENGTH_MASK & buf[0]) >> COAP_HEADER_TOKEN_LENGTH_SHIFT;
+    code_ = buf[1];
+    mid_ = buf[2] << 8 | buf[3];
+    
+//    Serial.print("CoapPacket::buffer_to_packet: ");
+//    for (int i = 0; i < len; i++) {
+//        Serial.print(buf[i], HEX);
+//        Serial.print(" ");
+//    }
+//    Serial.println("");
 
+//    Serial.print("token_len_: ");
+//    Serial.println(token_len_);
+    
+    // TODO
+    set_token(buf + COAP_HEADER_LEN);
+    
     //options
-    uint8_t *current_opt = buf + COAP_HEADER_LEN + 1;
-    if (opt_count_) {
+    uint8_t *current_opt = buf + COAP_HEADER_LEN + token_len_;
+    options_len = len - COAP_HEADER_LEN - token_len_;
+    
+    uint8_t current_delta = 0;
+    while (options_len) {
+        uint16_t opt_len;
 
-	uint16_t opt_len = 0;
-	uint8_t opt_index = 0;
-	uint8_t current_delta = 0;
-	for (opt_index = 0; opt_index < opt_count_; opt_index++) {
+//        Serial.print("options_len: ");
+//        Serial.println(options_len);
 
-	    current_delta += current_opt[0] >> 4;
-	    //get option length
-	    if ((0x0F & current_opt[0]) < 15) {
-		opt_len = 0x0F & current_opt[0];
-		current_opt += 1; //point to option value
-	    } else {
-		opt_len = current_opt[1] + 15;
-		current_opt += 2; //point to option value
-	    }
-	    if (current_delta == 14 && opt_len == 0) // fence post
-	    {
-		continue;
-	    }
-
-	    switch (current_delta) {
-		case CONTENT_TYPE:
-		    set_option(CONTENT_TYPE);
-		    content_type_ = get_int_opt_value(current_opt, opt_len, false);
-		    break;
-		case MAX_AGE:
-		    set_option(MAX_AGE);
-		    max_age_ = get_int_opt_value(current_opt, opt_len, false);
-		    break;
-		case PROXY_URI:
-		    set_option(PROXY_URI);
-		    break;
-		case ETAG:
-		    set_option(ETAG);
-		    break;
-		case URI_HOST:
-		    // based on id, not ip-literal
-		    set_option(URI_HOST);
-		    uri_host_ = get_int_opt_value(current_opt, opt_len, true);
-		    break;
-		case LOCATION_PATH:
-		    set_option(LOCATION_PATH);
-		    break;
-		case URI_PORT:
-		    set_option(URI_PORT);
-		    uri_port_ = get_int_opt_value(current_opt, opt_len, false);
-		    break;
-		case LOCATION_QUERY:
-		    set_option(LOCATION_QUERY);
-		    break;
-		case URI_PATH:
-		    set_option(URI_PATH);
-		    merge_options(&uri_path_, &uri_path_len_, current_opt, opt_len, '/');
-		    break;
-		case OBSERVE:
-		    set_option(OBSERVE);
-		    observe_ = get_int_opt_value(current_opt, opt_len, false);
-		    break;
-		case TOKEN:
-		    set_option(TOKEN);
-		    token_len_ = opt_len; // may fix
-		    memcpy(token_, current_opt, opt_len); // may fix
-		    break;
-		case ACCEPT:
-		    set_option(ACCEPT);
-		    accept_ = get_int_opt_value(current_opt, opt_len, false);
-		    break;
-		case IF_MATCH:
-		    set_option(IF_MATCH);
-		    break;
-		case MAX_OFE:
-		    set_option(MAX_OFE);
-		    break;
-		case URI_QUERY:
-		    set_option(URI_QUERY);
-		    make_uri_query(current_opt, opt_len, largeBuf);
-		    //merge_options( &uri_query_, &uri_query_len_, current_opt, opt_len, '&' );
-		    break;
-		case BLOCK2:
-		    set_option(BLOCK2);
-		    block2_num_ = get_int_opt_value(current_opt, opt_len, false);
-		    block2_more_ = (block2_num_ & 0x08) >> 3;
-		    block2_size_ = 16 << (block2_num_ & 0x07);
-		    block2_offset_ = ((block2_num_ & 0xF0) >> 4) * block2_size_;
-		    block2_num_ = ((block2_num_ & 0xF0) >> 4)&0x0F;
-		    break;
-		case BLOCK1:
-		    set_option(BLOCK1);
-		    break;
-		case IF_NONE_MATCH:
-		    set_option(IF_NONE_MATCH);
-		    break;
-		default:
-		    return BAD_OPTION;
-
-	    }
-	    current_opt += opt_len; // point to next option delta
-	}
+        if(current_opt[0] == COAP_PAYLOAD_MARKER)
+        {
+            break;
+        }
+        current_delta += current_opt[0] >> 4;
+        //get option length
+        if ((0x0F & current_opt[0]) < 15) {
+            opt_len = 0x0F & current_opt[0];
+            current_opt += 1; //point to option value
+            options_len -= (opt_len + 1);
+        } else {
+            opt_len = current_opt[1] + 15;
+            current_opt += 2; //point to option value
+            options_len -= (opt_len + 2);
+        }
+        if (current_delta == 14 && opt_len == 0) // fence post
+        {
+            continue;
+        }
+/*
+        Serial.print("options_len2: ");
+        Serial.println(options_len);
+        Serial.print("opt_len: ");
+        Serial.println(opt_len);
+        Serial.print("current_delta: ");
+        Serial.println(current_delta);
+*/
+        switch (current_delta) {
+            case IF_MATCH:
+                set_option(IF_MATCH);
+                break;
+            case URI_HOST:
+                // based on id, not ip-literal
+                set_option(URI_HOST);
+                uri_host_ = get_int_opt_value(current_opt, opt_len, true);
+                break;
+            case ETAG:
+                set_option(ETAG);
+                break;
+            case IF_NONE_MATCH:
+                set_option(IF_NONE_MATCH);
+                break;
+            case OBSERVE:
+                set_option(OBSERVE);
+                observe_ = get_int_opt_value(current_opt, opt_len, false);
+                break;
+            case URI_PORT:
+                set_option(URI_PORT);
+                uri_port_ = get_int_opt_value(current_opt, opt_len, false);
+                break;
+            case LOCATION_PATH:
+                set_option(LOCATION_PATH);
+                break;
+            case URI_PATH:
+                Serial.println("OPT: URI_PATH");
+                set_option(URI_PATH);
+                merge_options(&uri_path_, &uri_path_len_, current_opt, opt_len, '/');
+                break;
+            case CONTENT_FORMAT:
+                set_option(CONTENT_FORMAT);
+                content_type_ = get_int_opt_value(current_opt, opt_len, false);
+                Serial.print("OPT: CONTENT_FORMAT: ");
+                Serial.println(content_type_);
+                break;
+            case MAX_AGE:
+                set_option(MAX_AGE);
+                max_age_ = get_int_opt_value(current_opt, opt_len, false);
+                break;
+            case URI_QUERY:
+                set_option(URI_QUERY);
+                make_uri_query(current_opt, opt_len, largeBuf);
+                //merge_options( &uri_query_, &uri_query_len_, current_opt, opt_len, '&' );
+                break;
+            case ACCEPT:
+                set_option(ACCEPT);
+                accept_ = get_int_opt_value(current_opt, opt_len, false);
+                break;
+            case LOCATION_QUERY:
+                set_option(LOCATION_QUERY);
+                break;
+            case PROXY_URI:
+                set_option(PROXY_URI);
+                break;
+            case PROXY_SCHEME:
+                set_option(PROXY_SCHEME);
+                break;
+            case SIZE1:
+                set_option(SIZE1);
+                break;
+/*
+            case BLOCK2:
+                set_option(BLOCK2);
+                block2_num_ = get_int_opt_value(current_opt, opt_len, false);
+                block2_more_ = (block2_num_ & 0x08) >> 3;
+                block2_size_ = 16 << (block2_num_ & 0x07);
+                block2_offset_ = ((block2_num_ & 0xF0) >> 4) * block2_size_;
+                block2_num_ = ((block2_num_ & 0xF0) >> 4)&0x0F;
+                break;
+            case BLOCK1:
+                set_option(BLOCK1);
+                break;
+ */
+            default:
+                Serial.print("BAD_OPTION: ");
+                Serial.println(current_delta);
+                return BAD_OPTION;
+            }
+        current_opt += opt_len; // point to next option delta
     }
+    
     //get payload
-    payload_ = current_opt;
+    payload_ = current_opt + 1;
     payload_len_ = len - (payload_ - buf);
+
+//    Serial.print("payload_len_: ");
+//    Serial.println(payload_len_);
 
     return COAP_NO_ERROR;
 }
 
+
 uint8_t CoapPacket::packet_to_buffer(uint8_t *buf) {
     //options
     uint8_t current_delta = 0;
-    uint8_t buf_index = COAP_HEADER_LEN + 1;
-    if (is_option(CONTENT_TYPE)) {
-	buf_index += set_int_opt_value(CONTENT_TYPE, current_delta, &buf[buf_index], content_type_);
-	current_delta = CONTENT_TYPE;
-	opt_count_ += 1;
-    }
-    if (is_option(MAX_AGE)) {
-	buf_index += set_int_opt_value(MAX_AGE, current_delta, &buf[buf_index], max_age_);
-	current_delta = MAX_AGE;
-	opt_count_++;
-    }
+    uint8_t buf_index = COAP_HEADER_LEN;
+    
+    //header
+    buf[0] = COAP_HEADER_VERSION_MASK & version_ << COAP_HEADER_VERSION_SHIFT;
+    buf[0] |= COAP_HEADER_TYPE_MASK & type_ << COAP_HEADER_TYPE_SHIFT;
+    buf[0] |= COAP_HEADER_TOKEN_LENGTH_MASK & token_len_ << COAP_HEADER_TOKEN_LENGTH_SHIFT;
+    buf[1] = code_;
+    buf[2] = 0xFF & (mid_ >> 8);
+    buf[3] = 0xFF & mid_;
+
+//    Serial.print(" ---- token_len_: ");
+//    Serial.println(token_len_);
+//    Serial.print(" ---- buf0: ");
+//    Serial.println(buf[0], HEX);
+    
+    memcpy(&buf[buf_index], token_, token_len_);
+    buf_index += token_len_;
+    
     if (is_option(URI_HOST)) {
-	buf_index += set_int_opt_value(URI_HOST, current_delta, &buf[buf_index], uri_host_);
-	current_delta = URI_HOST;
-	opt_count_++;
-    }
-    if (is_option(URI_PORT)) {
-	buf_index += set_int_opt_value(URI_PORT, current_delta, &buf[buf_index], uri_port_);
-	current_delta = URI_PORT;
-	opt_count_++;
-    }
-    if (is_option(URI_PATH)) {
-	char seperator[] = "/";
-	buf_index += split_option(URI_PATH, current_delta, &buf[buf_index], seperator);
-	current_delta = URI_PATH;
+        buf_index += set_int_opt_value(URI_HOST, current_delta, &buf[buf_index], uri_host_);
+        current_delta = URI_HOST;
     }
     if (is_option(OBSERVE)) {
-	buf_index += set_int_opt_value(OBSERVE, current_delta, &buf[buf_index], observe_);
-	current_delta = OBSERVE;
-	opt_count_ += 1;
+        Serial.println("OBSERVE ");
+        buf_index += set_int_opt_value(OBSERVE, current_delta, &buf[buf_index], observe_);
+        current_delta = OBSERVE;
     }
-    if (is_option(TOKEN)) {
-	buf[buf_index++] = (TOKEN - current_delta) << 4 | token_len_;
-	memcpy(&buf[buf_index], token_, token_len_);
-	current_delta = TOKEN;
-	buf_index += token_len_;
-	opt_count_ += 1;
+    if (is_option(URI_PORT)) {
+        buf_index += set_int_opt_value(URI_PORT, current_delta, &buf[buf_index], uri_port_);
+        current_delta = URI_PORT;
+    }
+    if (is_option(CONTENT_FORMAT)) {
+//        Serial.print("OPT OUT: CONTENT_FORMAT: ");
+//        Serial.println(content_type_, HEX);
+        buf_index += set_int_opt_value(CONTENT_FORMAT, current_delta, &buf[buf_index], content_type_);
+        current_delta = CONTENT_FORMAT;
+    }
+    if (is_option(URI_PATH)) {
+        char seperator[] = "/";
+        buf_index += split_option(URI_PATH, current_delta, &buf[buf_index], seperator);
+        current_delta = URI_PATH;
+    }
+    if (is_option(MAX_AGE)) {
+        buf_index += set_int_opt_value(MAX_AGE, current_delta, &buf[buf_index], max_age_);
+        current_delta = MAX_AGE;
     }
     if (is_option(ACCEPT)) {
-	buf_index += set_int_opt_value(ACCEPT, current_delta, &buf[buf_index], accept_);
-	current_delta = ACCEPT;
-	opt_count_ += 1;
+        buf_index += set_int_opt_value(ACCEPT, current_delta, &buf[buf_index], accept_);
+        current_delta = ACCEPT;
     }
+/*
     if (is_option(BLOCK2)) {
-	uint32_t block = block2_num_ << 4;
-	if (block2_more_)
-	    block |= 0x8;
-	block |= 0xF & (power_of_two(block2_size_) - 4);
-	buf_index += set_int_opt_value(BLOCK2, current_delta, &buf[buf_index], block);
-	current_delta = BLOCK2;
-	opt_count_ += 1;
+        uint32_t block = block2_num_ << 4;
+        if (block2_more_)
+            block |= 0x8;
+        block |= 0xF & (power_of_two(block2_size_) - 4);
+        buf_index += set_int_opt_value(BLOCK2, current_delta, &buf[buf_index], block);
+        current_delta = BLOCK2;
+        opt_count_ += 1;
     }
-    //header
-    buf[0] = WISELIB_MID_COAP;
-    buf[1] = COAP_HEADER_VERSION_MASK & version_ << COAP_HEADER_VERSION_SHIFT;
-    buf[1] |= COAP_HEADER_TYPE_MASK & type_ << COAP_HEADER_TYPE_SHIFT;
-    buf[1] |= COAP_HEADER_OPT_COUNT_MASK & opt_count_ << COAP_HEADER_OPT_COUNT_SHIFT;
-    buf[2] = code_;
-    buf[3] = 0xFF & (mid_ >> 8);
-    buf[4] = 0xFF & mid_;
+ */
     //payload
-    memcpy(&buf[buf_index], payload_, payload_len_);
+    if(payload_len_ > 0)
+    {
+//        Serial.print("PAYLOAD LEN: ");
+//        Serial.println(payload_len_);
+        buf[buf_index++] = COAP_PAYLOAD_MARKER;
+        memcpy(&buf[buf_index], payload_, payload_len_);
+    }
     return buf_index + payload_len_;
 }
 
 uint8_t CoapPacket::add_fence_opt(uint8_t opt, uint8_t *current_delta, uint8_t *buf) {
     uint8_t i = 0;
     while (opt - *current_delta > 15) {
-	uint8_t delta = 14 - (*current_delta % 14);
-	set_opt_header(delta, 0, &buf[i++]);
-	*current_delta += delta;
-	opt_count_++;
+        uint8_t delta = 14 - (*current_delta % 14);
+        set_opt_header(delta, 0, &buf[i++]);
+        *current_delta += delta;
+        opt_count_++;
     }
     return i;
 }
 
 uint8_t CoapPacket::set_opt_header(uint8_t delta, size_t len, uint8_t *buf) {
     if (len < 15) {
-	buf[0] = delta << 4 | len;
-	return 1;
+        buf[0] = delta << 4 | len;
+        return 1;
     } else {
-	buf[0] = delta << 4 | 0x0F;
-	buf[1] = len - 15;
-	return 2;
+        buf[0] = delta << 4 | 0x0F;
+        buf[1] = len - 15;
+        return 2;
     }
 }
 
 uint8_t CoapPacket::set_int_opt_value(uint8_t opt, uint8_t current_delta, uint8_t *buf, uint32_t value) {
     uint8_t i = add_fence_opt(opt, &current_delta, buf);
     uint8_t start_i = i;
-
+    
     //uint8_t *option = &buf[i];
-
+    
     if (0xFF000000 & value) buf[++i] = (uint8_t) (0xFF & value >> 24);
     if (0xFFFF0000 & value) buf[++i] = (uint8_t) (0xFF & value >> 16);
     if (0xFFFFFF00 & value) buf[++i] = (uint8_t) (0xFF & value >> 8);
     if (0xFFFFFFFF & value) buf[++i] = (uint8_t) (0xFF & value);
-
+    
     i += set_opt_header(opt - current_delta, i - start_i, &buf[start_i]);
     return i;
 }
@@ -253,50 +298,50 @@ uint16_t CoapPacket::get_int_opt_value(uint8_t *value, uint16_t length, bool hex
     uint16_t var = 0;
     int i = 0;
     while (i < length) {
-	if (hexAscii == false) {
-	    var <<= 8;
-	    var |= 0xFF & value[i++];
-	} else {
-	    var *= 16;
-	    if (value[i] >= 0x41 && value[i] <= 0x5a)
-		var += value[i] - 0x41 + 10;
-	    else if (value[i] >= 0x61 && value[i] <= 0x7a)
-		var += value[i] - 0x61 + 10;
-	    else if (value[i] >= 0x30 && value[i] <= 0x39)
-		var += value[i] - 0x30;
-	    i++;
-	}
+        if (hexAscii == false) {
+            var <<= 8;
+            var |= 0xFF & value[i++];
+        } else {
+            var *= 16;
+            if (value[i] >= 0x41 && value[i] <= 0x5a)
+                var += value[i] - 0x41 + 10;
+            else if (value[i] >= 0x61 && value[i] <= 0x7a)
+                var += value[i] - 0x61 + 10;
+            else if (value[i] >= 0x30 && value[i] <= 0x39)
+                var += value[i] - 0x30;
+            i++;
+        }
     }
     return var;
 }
 
 void CoapPacket::merge_options(char **dst, size_t *dst_len, uint8_t *value, uint16_t length, char seperator) {
     if (*dst_len > 0) {
-	(*dst)[*dst_len] = seperator;
-	*dst_len += 1;
-	memmove((*dst) + (*dst_len), value, length);
-	*dst_len += length;
+        (*dst)[*dst_len] = seperator;
+        *dst_len += 1;
+        memmove((*dst) + (*dst_len), value, length);
+        *dst_len += length;
     } else {
-	*dst = (char *) value;
-	*dst_len = length;
+        *dst = (char *) value;
+        *dst_len = length;
     }
 }
 
 void CoapPacket::make_uri_query(uint8_t* value, uint16_t length, char* largeBuf) {
     /*
-    uint16_t split_position = 0;
-    for( int i = 0; i < length; i++ )
-    {
-       if( value[i] == 61 ) // ascii of "="
-       {
-	  split_position = i;
-	  break;
-       }
-    }
-    query_t new_query;
-    new_query.name = make_string( ( char* )value, split_position, largeBuf );
-    new_query.value = make_string( ( char* )value + split_position + 1, length - split_position - 1, largeBuf );
-    queries_.push_back( new_query );
+     uint16_t split_position = 0;
+     for( int i = 0; i < length; i++ )
+     {
+     if( value[i] == 61 ) // ascii of "="
+     {
+     split_position = i;
+     break;
+     }
+     }
+     query_t new_query;
+     new_query.name = make_string( ( char* )value, split_position, largeBuf );
+     new_query.value = make_string( ( char* )value + split_position + 1, length - split_position - 1, largeBuf );
+     queries_.push_back( new_query );
      */
 }
 
@@ -306,21 +351,21 @@ uint8_t CoapPacket::split_option(uint8_t opt, uint8_t current_delta, uint8_t* bu
     uint8_t path_last = 0;
     uint8_t shift = 0;
     while (index < uri_path_len_) {
-	index += strcspn(&uri_path_[index], seperator) + 1;
-	if (index - path_last - 1 > 15) // large option
-	{
-	    buf[buf_last] = (opt - current_delta) << 4 | 15;
-	    buf[buf_last + 1] = index - path_last - 1 - 15;
-	    memcpy(&buf[buf_last + 2], &uri_path_[path_last], index - path_last - 1);
-	    buf_last = index + (++shift);
-	} else {
-	    buf[buf_last] = (opt - current_delta) << 4 | (index - path_last - 1);
-	    memcpy(&buf[buf_last + 1], &uri_path_[path_last], index - path_last - 1);
-	    buf_last = index + shift;
-	}
-	path_last = index;
-	current_delta = opt;
-	opt_count_ += 1;
+        index += strcspn(&uri_path_[index], seperator) + 1;
+        if (index - path_last - 1 > 15) // large option
+        {
+            buf[buf_last] = (opt - current_delta) << 4 | 15;
+            buf[buf_last + 1] = index - path_last - 1 - 15;
+            memcpy(&buf[buf_last + 2], &uri_path_[path_last], index - path_last - 1);
+            buf_last = index + (++shift);
+        } else {
+            buf[buf_last] = (opt - current_delta) << 4 | (index - path_last - 1);
+            memcpy(&buf[buf_last + 1], &uri_path_[path_last], index - path_last - 1);
+            buf_last = index + shift;
+        }
+        path_last = index;
+        current_delta = opt;
+        opt_count_ += 1;
     }
     return buf_last;
 }
@@ -328,8 +373,8 @@ uint8_t CoapPacket::split_option(uint8_t opt, uint8_t current_delta, uint8_t* bu
 uint8_t CoapPacket::power_of_two(uint16_t num) {
     uint8_t i = 0;
     while (num != 1) {
-	num >>= 1;
-	i++;
+        num >>= 1;
+        i++;
     }
     return i;
 }
@@ -502,10 +547,10 @@ void CoapPacket::set_accept(uint16_t accept) {
 
 void CoapPacket::set_uri_query(String uri_query_name, String uri_query_value) {
     /*
-    query_t new_query;
-    new_query.name = uri_query_name;
-    new_query.value = uri_query_value;
-    queries_.push_back( new_query );
+     query_t new_query;
+     new_query.name = uri_query_name;
+     new_query.value = uri_query_value;
+     queries_.push_back( new_query );
      */
 }
 

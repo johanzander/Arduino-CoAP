@@ -14,8 +14,6 @@
  ** If not, see <http://www.gnu.org/licenses/>.                                **
  *******************************************************************************/
 
-#define WISELIB_MID_COAP                    51
-// end of wiselib defines
 // CONFIGURATION
 #define CONF_MAX_RESOURCES                  9
 #define CONF_LARGE_BUF_LEN                  CONF_MAX_RESOURCES*6
@@ -35,5 +33,5 @@
 #include "coap_attributes.h"
 
 // CONFIGURE  OPERTATIONS
-//#define ENABLE_DEBUG
+#define ENABLE_DEBUG
 #define ENABLE_OBSERVE

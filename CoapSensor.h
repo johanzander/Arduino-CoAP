@@ -21,25 +21,25 @@
 
 class CoapSensor {
 public:
-
+    
     CoapSensor() {
-	this->method = GET | POST;
-	this->name = "unknown";
-	this->fast = true;
-	this->notify_time = 20;
-	this->content_type = TEXT_PLAIN;
-	this->changed = false;
+        this->method = GET | POST;
+        this->name = "unknown";
+        this->fast = true;
+        this->notify_time = 20;
+        this->content_type = TEXT_PLAIN;
+        this->changed = false;
     }
-
+    
     CoapSensor(String name) {
-	this->method = GET | POST;
-	this->name = name;
-	this->fast = true;
-	this->notify_time = 20;
-	this->content_type = TEXT_PLAIN;
-	this->changed = false;
+        this->method = GET | POST;
+        this->name = name;
+        this->fast = true;
+        this->notify_time = 20;
+        this->content_type = TEXT_PLAIN;
+        this->changed = false;
     }
-
+    
     coap_status_t callback(uint8_t method, uint8_t* input_data, size_t input_data_len, uint8_t* output_data, size_t* output_data_len, queries_t queries);
     uint8_t get_method();
     String get_name();

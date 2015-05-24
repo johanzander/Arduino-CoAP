@@ -18,15 +18,14 @@
 #define COAP_H
 
 #include <Arduino.h>
-#include <XbeeRadio.h>
 #include "coap_conf.h"
 //#include "vector.h"
 #include "packet.h"
 #include "CoapSensor.h"
+#include "CoapTransport.h"
 
 #include "resource.h"
 #include "observer.h"
-
 
 
 typedef CoapPacket coap_packet_t;
@@ -35,17 +34,11 @@ typedef CoapResource resource_t;
 /**
  * The Coap Server Class.
  * 
- * @param xbee The XBEE to use for communication.
- * @param response A response instance to use for outgoing messages.
- * @param rx An Rx16Response instance for outgoing XBEE addresses.
+ * @param transport The CoapTransport to use for communication.
  */
 class Coap {
 public:
-#ifdef ENABLE_DEBUG
-    void init(SoftwareSerial *mySerial, XBeeRadio* xbee, XBeeRadioResponse* response, Rx16Response* rx, resource_t* resources, uint8_t* buf, char* largeBuf);
-#else
-    void init(XBeeRadio* xbee, XBeeRadioResponse* response, Rx16Response* rx);
-#endif
+    void init(CoapTransport* transport);
 
     /**
      * Handles all requests.
@@ -169,18 +162,7 @@ public:
 
 private:
 
-    //Create the XbeeRadio object we'll be using
-    XBeeRadio *xbee_;
-    // create a reusable response object for responses we expect to handle
-    XBeeRadioResponse *response_;
-    // create a reusable rx16 response object to get the address
-    Rx16Response *rx_;
-    // create a tx16 request object
-    Tx16Request tx_;
-#ifdef ENABLE_DEBUG
-    // Serial debug
-    SoftwareSerial *mySerial_;
-#endif
+    CoapTransport *transport_;
     bool broadcasting;
     unsigned long timestamp;
     unsigned long last_broadcast;
@@ -188,6 +170,8 @@ private:
 
     // Message ID
     uint16_t mid_;
+
+    uint8_t packetbuf[256];
 
     // new vector type resources
     // active requests vector
@@ -215,7 +199,6 @@ private:
     // observe variables
     uint16_t observe_counter_;
     uint8_t output_data[CONF_LARGE_BUF_LEN];
-
 };
 
 #endif
