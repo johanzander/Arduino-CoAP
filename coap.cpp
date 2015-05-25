@@ -304,16 +304,16 @@ void Coap::receiver(uint8_t* buf, uint16_t from, uint8_t len) {
                     response.set_payload(output_data + offset);
                     response.set_payload_len(output_data_len);
 
-                    DBG(Serial.print("MSG PAYLOAD: "));
-                    for (int i = 0; i < response.payload_len_; i++) {
-                        DBG(Serial.print(response.payload_[i], HEX));
-                        DBG(Serial.print(" "));
-                    }
-                    DBG(Serial.println(""));
+//                    DBG(Serial.print("MSG PAYLOAD: "));
+//                    for (int i = 0; i < response.payload_len_; i++) {
+//                        DBG(Serial.print(response.payload_[i], HEX));
+//                        DBG(Serial.print(" "));
+//                    }
+//                    DBG(Serial.println(""));
 
 #ifdef ENABLE_OBSERVE
                     // if it is set, register the observer
-                    if (msg.code_w() == COAP_GET && msg.is_option(OBSERVE) && res->notify_time_w() > 0) {
+                    if (msg.code_w() == COAP_GET && msg.is_option(OBSERVE)) {
                         if (coap_add_observer(&msg, &from, res) == 1) {
                             response.set_option(OBSERVE);
                             response.set_observe(observe_counter_);
@@ -565,19 +565,23 @@ void Coap::coap_remove_observer(uint16_t mid) {
 
 void Coap::coap_notify() {
     for (int i = 0; i < CONF_MAX_OBSERVERS; i++) {
-        
+
         if (observers[i].observe_resource_ == NULL) continue;
         
         observer_t * observer = &(observers[i]);
         CoapResource* resource = observer->observe_resource_;
         
-        if ((observers[i].observe_timestamp_ < millis()) || (resource->is_changed())) {
+        if (((resource->notify_time_w() > 0) && (observers[i].observe_timestamp_ < millis())) ||
+            (resource->is_changed())) {
             coap_packet_t notification;
             uint8_t notification_size;
             //uint8_t output_data[CONF_LARGE_BUF_LEN];
             size_t output_data_len;
             memset(sendBuf_, 0, CONF_MAX_MSG_LEN);
-            observer->observe_timestamp_ = millis() + resource->notify_time_w()*1000;
+            if (resource->notify_time_w() > 0)
+            {
+                observer->observe_timestamp_ = millis() + resource->notify_time_w()*1000;
+            }
             
             // send msg
             notification.init();

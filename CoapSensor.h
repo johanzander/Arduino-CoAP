@@ -26,18 +26,18 @@ public:
         this->method = GET | POST;
         this->name = "unknown";
         this->fast = true;
-        this->notify_time = 20;
+        this->notify_time = 0;
         this->content_type = TEXT_PLAIN;
-        this->changed = false;
+        this->changed = true;
     }
     
     CoapSensor(String name) {
         this->method = GET | POST;
         this->name = name;
         this->fast = true;
-        this->notify_time = 20;
+        this->notify_time = 0;
         this->content_type = TEXT_PLAIN;
-        this->changed = false;
+        this->changed = true;
     }
     
     coap_status_t callback(uint8_t method, uint8_t* input_data, size_t input_data_len, uint8_t* output_data, size_t* output_data_len, queries_t queries);
