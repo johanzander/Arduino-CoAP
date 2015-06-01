@@ -14,8 +14,8 @@ The resource is OBSERVEable.
 #include <SPI.h>
 #include <WiFi.h>
 #include <coap.h>
-#include "myGETSensor.h"
-#include "myPOSTSensor.h"
+#include "examples/myGETSensor.h"
+#include "examples/myPOSTSensor.h"
 #include "WiFiTransport.h"
 
 // WiFi stuff
